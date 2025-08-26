@@ -1,0 +1,187 @@
+name: Environment Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+        - validate-secrets
+        - check-env-vars
+        - setup-demo
+
+jobs:
+  validate-secrets:
+    name: Validate Required Secrets
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'validate-secrets'
+
+    steps:
+    - name: Check GEMINI_API_KEY
+      run: |
+        if [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then
+          echo "❌ GEMINI_API_KEY secret is not set"
+          echo "Please add your Gemini API key to repository secrets:"
+          echo "1. Go to repository Settings > Secrets and variables > Actions"
+          echo "2. Click 'New repository secret'"
+          echo "3. Name: GEMINI_API_KEY"
+          echo "4. Value: Your Google Gemini API key"
+          exit 1
+        else
+          echo "✅ GEMINI_API_KEY secret is configured"
+        fi
+
+    - name: Validate API key format
+      run: |
+        API_KEY="${{ secrets.GEMINI_API_KEY }}"
+        if [[ ! "$API_KEY" =~ ^[A-Za-z0-9_-]+$ ]]; then
+          echo "⚠️  Warning: API key format might be invalid"
+          echo "Expected format: alphanumeric characters, hyphens, and underscores"
+        else
+          echo "✅ API key format looks valid"
+        fi
+
+  check-env-vars:
+    name: Check Environment Variables
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'check-env-vars'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check for .env files
+      run: |
+        echo "Checking for environment configuration files..."
+
+        if [ -f ".env.example" ]; then
+          echo "✅ .env.example found:"
+          cat .env.example
+        else
+          echo "📝 Creating .env.example..."
+          cat > .env.example << 'EOF'
+        # Gemini API Configuration
+        GEMINI_API_KEY=your_api_key_here
+
+        # Application Configuration
+        NODE_ENV=development
+
+        # Optional: Custom API endpoint (if using proxy)
+        # API_ENDPOINT=https://your-proxy.com/api
+        EOF
+          echo "Created .env.example with template configuration"
+        fi
+
+        if [ -f ".env.local" ]; then
+          echo "⚠️  .env.local file exists (should not be committed)"
+        else
+          echo "✅ No .env.local file found in repository (good for security)"
+        fi
+
+    - name: Validate vite.config for environment variables
+      run: |
+        if [ -f "vite.config.ts" ] || [ -f "vite.config.js" ]; then
+          echo "Checking Vite configuration for environment variable handling..."
+
+          if grep -q "GEMINI_API_KEY" vite.config.* 2>/dev/null; then
+            echo "✅ Vite config includes GEMINI_API_KEY handling"
+          else
+            echo "⚠️  Vite config might not handle GEMINI_API_KEY properly"
+          fi
+        fi
+
+  setup-demo:
+    name: Setup Demo Environment
+    runs-on: ubuntu-latest
+    if: github.event.inputs.action == 'setup-demo'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Create demo configuration
+      run: |
+        echo "Setting up demo environment..."
+
+        # Create a demo .env.local (this would normally not be committed)
+        cat > .env.local << 'EOF'
+        # Demo configuration - DO NOT COMMIT TO REPOSITORY
+        GEMINI_API_KEY=demo_key_placeholder
+        NODE_ENV=development
+        EOF
+
+        echo "✅ Demo environment configured"
+        echo "⚠️  Remember to replace GEMINI_API_KEY with your actual key"
+
+    - name: Test build with demo config
+      run: |
+        echo "Testing build process..."
+        npm run build
+
+        echo "✅ Build successful with demo configuration"
+        echo "📦 Build artifacts:"
+        ls -la dist/
+
+    - name: Cleanup demo files
+      run: |
+        rm -f .env.local
+        echo "🧹 Cleaned up demo files"
+
+  security-check:
+    name: Security Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check for exposed secrets
+      run: |
+        echo "🔍 Scanning for potentially exposed secrets..."
+
+        # Check for hardcoded API keys
+        if grep -r "AIza[0-9A-Za-z_-]{35}" . --exclude-dir=node_modules --exclude-dir=.git; then
+          echo "❌ Found potential Google API key in code!"
+          exit 1
+        fi
+
+        # Check for other common secret patterns
+        PATTERNS=(
+          "api[_-]?key.*=.*['\"][^'\"]*['\"]"
+          "secret.*=.*['\"][^'\"]*['\"]"
+          "password.*=.*['\"][^'\"]*['\"]"
+          "token.*=.*['\"][^'\"]*['\"]"
+        )
+
+        for pattern in "${PATTERNS[@]}"; do
+          if grep -r -i "$pattern" . --exclude-dir=node_modules --exclude-dir=.git --exclude="*.yml" --exclude="*.yaml" --exclude="*.md"; then
+            echo "⚠️  Found potential secret pattern: $pattern"
+          fi
+        done
+
+        echo "✅ Basic security scan completed"
+
+    - name: Check .gitignore for security
+      run: |
+        echo "🔍 Checking .gitignore for security best practices..."
+
+        REQUIRED_IGNORES=(".env" ".env.local" "*.log" "node_modules")
+
+        for ignore in "${REQUIRED_IGNORES[@]}"; do
+          if grep -q "$ignore" .gitignore; then
+            echo "✅ $ignore is properly ignored"
+          else
+            echo "⚠️  $ignore should be added to .gitignore"
+          fi
+        done

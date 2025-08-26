@@ -4,17 +4,48 @@
 
 # Run and deploy your AI Studio app
 
-This contains everything you need to run your app locally.
+This contains everything you need to run your app locally and deploy it with automated GitHub workflows.
 
 View your app in AI Studio: https://ai.studio/apps/drive/1TXBuFc-IoDqxqApAfjy_7bLfKswUVwXh
 
-## Run Locally
+## 🚀 Quick Deploy
 
-**Prerequisites:**  Node.js
+**Automated deployment with GitHub workflows is now available!**
 
+1. **Add your API key** to repository secrets (`GEMINI_API_KEY`)
+2. **Push to main** - automatic deployment to GitHub Pages
+3. **Create releases** with `git tag v1.0.0`
+
+📖 See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment guide.
+
+## 🔧 Run Locally
+
+**Prerequisites:** Node.js
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+   ```bash
+   npm install
+   ```
+
+2. Set up environment:
+   ```bash
+   cp .env.example .env.local
+   # Edit .env.local with your Gemini API key
+   ```
+
 3. Run the app:
-   `npm run dev`
+   ```bash
+   npm run dev
+   ```
+
+## 🤖 GitHub Workflows
+
+This repository includes comprehensive GitHub Actions workflows:
+
+- **🔄 CI/CD** - Automated testing and building
+- **🚀 Deployment** - GitHub Pages and custom deployments  
+- **📦 Release Management** - Automated releases and packaging
+- **🔒 Security** - Secret validation and security scanning
+- **🌍 Multi-Environment** - Staging and production deployments
+
+📖 See [.github/workflows/README.md](.github/workflows/README.md) for detailed workflow documentation.
