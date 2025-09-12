@@ -1,0 +1,146 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build application
+      run: npm run build
+      env:
+        NODE_ENV: production
+
+    - name: Create release package
+      run: |
+        # Create a release package with all necessary files
+        mkdir -p release
+
+        # Copy build artifacts
+        cp -r dist/* release/
+
+        # Copy documentation and configuration
+        cp README.md release/
+        cp package.json release/
+        cp metadata.json release/ 2>/dev/null || echo "No metadata.json found"
+
+        # Create deployment guide
+        cat > release/DEPLOYMENT.md << 'EOF'
+        # AI Studio App Deployment Guide
+
+        This package contains a built AI Studio application ready for deployment.
+
+        ## Quick Deploy Options
+
+        ### 1. GitHub Pages
+        1. Upload the contents to your repository
+        2. Enable GitHub Pages in repository settings
+        3. Set source to "Deploy from a branch" and select your branch
+
+        ### 2. Vercel
+        1. Connect your repository to Vercel
+        2. Set build command: `npm run build`
+        3. Set output directory: `dist`
+        4. Add environment variable: `GEMINI_API_KEY`
+
+        ### 3. Netlify
+        1. Drag and drop the contents to Netlify
+        2. Or connect your repository
+        3. Set build command: `npm run build`
+        4. Set publish directory: `dist`
+
+        ### 4. Static Web Hosting
+        Upload all files to any static web hosting service.
+
+        ## Environment Variables
+        - `GEMINI_API_KEY`: Your Google Gemini API key (required)
+
+        ## Support
+        For issues and support, visit: https://github.com/GizzZmo/Code-ReViewer
+        EOF
+
+        # Create ZIP package
+        cd release
+        zip -r ../ai-studio-app-release.zip .
+        cd ..
+
+        echo "Release package created: ai-studio-app-release.zip"
+        ls -la ai-studio-app-release.zip
+
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Generate a simple changelog
+        if git tag --list | grep -q "v"; then
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ ! -z "$LAST_TAG" ]; then
+            echo "## Changes since $LAST_TAG" > CHANGELOG.md
+            git log --pretty=format:"- %s (%h)" $LAST_TAG..HEAD >> CHANGELOG.md
+          else
+            echo "## Initial Release" > CHANGELOG.md
+            echo "- First release of the AI Studio app" >> CHANGELOG.md
+          fi
+        else
+          echo "## Initial Release" > CHANGELOG.md
+          echo "- First release of the AI Studio app" >> CHANGELOG.md
+        fi
+
+        echo "Changelog generated:"
+        cat CHANGELOG.md
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        release_name: Release ${{ steps.version.outputs.version }}
+        body_path: CHANGELOG.md
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./ai-studio-app-release.zip
+        asset_name: ai-studio-app-${{ steps.version.outputs.version }}.zip
+        asset_content_type: application/zip

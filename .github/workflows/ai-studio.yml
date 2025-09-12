@@ -1,0 +1,223 @@
+name: AI Studio App Workflow
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      deploy_environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+
+env:
+  NODE_VERSION: '20.x'
+  BUILD_ARTIFACT_NAME: 'ai-studio-app'
+
+jobs:
+  validate:
+    name: Validate AI Studio App
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Validate package.json
+      run: |
+        # Check for required AI Studio app structure
+        if [ ! -f "package.json" ]; then
+          echo "Error: package.json not found"
+          exit 1
+        fi
+
+        if [ ! -f "index.html" ]; then
+          echo "Error: index.html not found"
+          exit 1
+        fi
+
+        if [ ! -f "vite.config.ts" ] && [ ! -f "vite.config.js" ]; then
+          echo "Warning: No Vite config found"
+        fi
+
+    - name: Check AI Studio metadata
+      run: |
+        if [ -f "metadata.json" ]; then
+          echo "AI Studio metadata found:"
+          cat metadata.json
+
+          # Validate metadata structure
+          if ! jq empty metadata.json 2>/dev/null; then
+            echo "Error: Invalid JSON in metadata.json"
+            exit 1
+          fi
+
+          # Check for required fields
+          if ! jq -e '.name' metadata.json > /dev/null; then
+            echo "Warning: metadata.json missing 'name' field"
+          fi
+
+          if ! jq -e '.description' metadata.json > /dev/null; then
+            echo "Warning: metadata.json missing 'description' field"
+          fi
+        else
+          echo "Warning: No metadata.json found for AI Studio app"
+        fi
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Type check
+      run: |
+        if [ -f "tsconfig.json" ]; then
+          npx tsc --noEmit
+        else
+          echo "No TypeScript configuration found, skipping type check"
+        fi
+
+  build:
+    name: Build AI Studio App
+    runs-on: ubuntu-latest
+    needs: validate
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build application
+      run: npm run build
+      env:
+        NODE_ENV: production
+
+    - name: Validate build output
+      run: |
+        echo "Build completed. Checking output..."
+        ls -la dist/
+
+        # Check for required files
+        if [ ! -f "dist/index.html" ]; then
+          echo "Error: dist/index.html not found"
+          exit 1
+        fi
+
+        # Check build size
+        BUILD_SIZE=$(du -sh dist/ | cut -f1)
+        echo "Build size: $BUILD_SIZE"
+
+        # Warn if build is too large (>10MB)
+        if [ $(du -s dist/ | cut -f1) -gt 10240 ]; then
+          echo "Warning: Build size is quite large (${BUILD_SIZE})"
+        fi
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.BUILD_ARTIFACT_NAME }}
+        path: dist/
+        retention-days: 30
+
+  test-deployment:
+    name: Test Deployment
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.BUILD_ARTIFACT_NAME }}
+        path: dist/
+
+    - name: Setup simple HTTP server
+      run: |
+        cd dist
+        python3 -m http.server 8000 &
+        SERVER_PID=$!
+        echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+        sleep 2
+
+    - name: Test deployment
+      run: |
+        # Basic health check
+        curl -f http://localhost:8000/ || (echo "Deployment test failed" && exit 1)
+        echo "Deployment test passed"
+
+    - name: Cleanup
+      run: |
+        if [ ! -z "$SERVER_PID" ]; then
+          kill $SERVER_PID || true
+        fi
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment == 'staging')
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.BUILD_ARTIFACT_NAME }}
+        path: dist/
+
+    - name: Deploy to staging
+      id: deploy
+      run: |
+        echo "Deploying to staging environment..."
+        # Add your staging deployment logic here
+        # For example: deploying to Vercel, Netlify, or another service
+        echo "url=https://staging.example.com" >> $GITHUB_OUTPUT
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_environment == 'production')
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ env.BUILD_ARTIFACT_NAME }}
+        path: dist/
+
+    - name: Deploy to production
+      id: deploy
+      run: |
+        echo "Deploying to production environment..."
+        # Add your production deployment logic here
+        echo "url=https://production.example.com" >> $GITHUB_OUTPUT
+
+    - name: Notify deployment
+      run: |
+        echo "🚀 AI Studio app deployed to production!"
+        echo "URL: ${{ steps.deploy.outputs.url }}"

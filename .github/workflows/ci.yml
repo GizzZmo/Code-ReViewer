@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Lint code
+      run: |
+        # Add linting if linter is configured
+        if [ -f "package.json" ] && grep -q "lint" package.json; then
+          npm run lint
+        else
+          echo "No linting script found, skipping..."
+        fi
+
+    - name: Type check
+      run: |
+        # Run TypeScript compilation check
+        npx tsc --noEmit
+
+    - name: Build application
+      run: npm run build
+
+    - name: Test build artifacts
+      run: |
+        # Verify build artifacts exist
+        ls -la dist/
+        test -f dist/index.html
+        test -f dist/assets/*.js
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts-node-${{ matrix.node-version }}
+        path: dist/
+        retention-days: 7
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run security audit
+      run: npm audit --audit-level moderate
+
+    - name: Check for sensitive files
+      run: |
+        # Check for accidentally committed secrets
+        if grep -r "GEMINI_API_KEY.*=" . --exclude-dir=node_modules --exclude-dir=.git --exclude="*.yml" --exclude="*.yaml" --exclude="*.md"; then
+          echo "Warning: Potential API key found in code"
+          exit 1
+        fi
