@@ -29,6 +29,8 @@
 - [Contributing](#-contributing)
 - [License](#-license)
 
+> 💡 **New to the project?** Check out our [Documentation Guide](DOCS.md) to navigate all available docs!
+
 ## 🎯 Overview
 
 **Gemini Code Reviewer** is a web-based application that leverages Google's powerful Gemini AI to provide instant, expert-level code reviews. Simply paste your code, and get comprehensive feedback on:
