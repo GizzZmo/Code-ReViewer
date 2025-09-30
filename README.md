@@ -12,9 +12,10 @@ View your app in AI Studio: https://ai.studio/apps/drive/1TXBuFc-IoDqxqApAfjy_7b
 
 **Automated deployment with GitHub workflows is now available!**
 
-1. **Add your API key** to repository secrets (`GEMINI_API_KEY`)
+1. **Build and deploy** - No API key needed at build time!
 2. **Push to main** - automatic deployment to GitHub Pages
 3. **Create releases** with `git tag v1.0.0`
+4. **Configure API key** - Users enter their API key at runtime in the browser
 
 📖 See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment guide.
 
@@ -27,16 +28,18 @@ View your app in AI Studio: https://ai.studio/apps/drive/1TXBuFc-IoDqxqApAfjy_7b
    npm install
    ```
 
-2. Set up environment:
-   ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your Gemini API key
-   ```
-
-3. Run the app:
+2. Run the app:
    ```bash
    npm run dev
    ```
+
+3. **Configure your API key:**
+   - Open the app in your browser
+   - Enter your Gemini API key in the configuration panel at the top
+   - Your API key is stored securely in your browser's local storage
+   - Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+**Note:** The API key is no longer required at build time. Users can configure their API key directly in the application UI, and it's stored locally in their browser.
 
 ## 🤖 GitHub Workflows
 

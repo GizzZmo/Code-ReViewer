@@ -1,13 +1,18 @@
 
 import { GoogleGenAI } from "@google/genai";
+import { getStoredApiKey } from "../components/ApiKeyConfig";
 
-const API_KEY = process.env.API_KEY;
+const getApiKey = (): string => {
+  const apiKey = getStoredApiKey();
+  if (!apiKey) {
+    throw new Error("API key not configured. Please set your API key in the configuration.");
+  }
+  return apiKey;
+};
 
-if (!API_KEY) {
-  throw new Error("API_KEY environment variable not set");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const createAI = (): GoogleGenAI => {
+  return new GoogleGenAI({ apiKey: getApiKey() });
+};
 
 const systemInstruction = `
 You are an expert code reviewer AI. Your purpose is to provide a comprehensive, clear, and constructive code review.
@@ -27,6 +32,7 @@ If the code is perfect, commend the user and explain why it's well-written.
 
 export const reviewCode = async (code: string): Promise<string> => {
   try {
+    const ai = createAI();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: code,

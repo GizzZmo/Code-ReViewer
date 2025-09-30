@@ -6,12 +6,14 @@ import { ReviewOutput } from './components/ReviewOutput';
 import { Loader } from './components/Loader';
 import { reviewCode } from './services/geminiService';
 import { RobotIcon } from './components/icons/RobotIcon';
+import { ApiKeyConfig } from './components/ApiKeyConfig';
 
 const App: React.FC = () => {
   const [code, setCode] = useState<string>('');
   const [review, setReview] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [hasApiKey, setHasApiKey] = useState<boolean>(false);
 
   const handleReviewCode = useCallback(async () => {
     if (!code.trim()) {
@@ -35,14 +37,19 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans flex flex-col">
       <Header />
+      <div className="bg-gray-800/50 border-b border-gray-700 p-3">
+        <div className="container mx-auto">
+          <ApiKeyConfig onApiKeySet={setHasApiKey} />
+        </div>
+      </div>
       <main className="flex-grow flex flex-col md:flex-row p-4 gap-4">
-        <div className="flex-1 flex flex-col h-[calc(100vh-120px)] md:h-auto">
+        <div className="flex-1 flex flex-col h-[calc(100vh-180px)] md:h-auto">
           <CodeEditor code={code} setCode={setCode} />
         </div>
         <div className="flex items-center justify-center">
             <button
                 onClick={handleReviewCode}
-                disabled={isLoading}
+                disabled={isLoading || !hasApiKey}
                 className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-900 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 ease-in-out flex items-center justify-center gap-2 transform hover:scale-105 disabled:scale-100"
             >
                 {isLoading ? (
@@ -58,7 +65,7 @@ const App: React.FC = () => {
                 )}
             </button>
         </div>
-        <div className="flex-1 flex flex-col h-[calc(100vh-120px)] md:h-auto">
+        <div className="flex-1 flex flex-col h-[calc(100vh-180px)] md:h-auto">
           <ReviewOutput review={review} isLoading={isLoading} error={error} />
         </div>
       </main>
