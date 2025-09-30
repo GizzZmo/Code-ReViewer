@@ -45,12 +45,19 @@ Built with React, TypeScript, and Vite for a fast, modern development experience
 
 ## ✨ Features
 
+
 ### Core Functionality
 - 🤖 **AI-Powered Analysis** - Leverages Gemini 2.5 Flash for intelligent code review
 - 💻 **Syntax Highlighting** - Clear code presentation with proper formatting
 - 📝 **Markdown Output** - Well-structured, readable feedback
 - ⚡ **Real-time Processing** - Fast response times with streaming support
 - 🎨 **Modern UI** - Clean, responsive interface built with Tailwind CSS
+
+1. **Build and deploy** - No API key needed at build time!
+2. **Push to main** - automatic deployment to GitHub Pages
+3. **Create releases** with `git tag v1.0.0`
+4. **Configure API key** - Users enter their API key at runtime in the browser
+
 
 ### Developer Experience
 - 🔧 **TypeScript** - Full type safety and autocomplete
@@ -85,6 +92,7 @@ Built with React, TypeScript, and Vite for a fast, modern development experience
    npm install
    ```
 
+
 3. **Set up environment variables**
    ```bash
    cp .env.example .env.local
@@ -96,9 +104,13 @@ Built with React, TypeScript, and Vite for a fast, modern development experience
    ```
 
 4. **Start the development server**
+
+2. Run the app:
+
    ```bash
    npm run dev
    ```
+
 
 5. **Open your browser**
    Navigate to `http://localhost:5173`
@@ -256,6 +268,14 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - Add tests for new features
 - Update documentation as needed
 - Ensure all CI checks pass
+=======
+3. **Configure your API key:**
+   - Open the app in your browser
+   - Enter your Gemini API key in the configuration panel at the top
+   - Your API key is stored securely in your browser's local storage
+   - Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+**Note:** The API key is no longer required at build time. Users can configure their API key directly in the application UI, and it's stored locally in their browser.
 
 ## 🤖 GitHub Workflows
 
