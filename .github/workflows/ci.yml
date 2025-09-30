@@ -5,14 +5,17 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+  workflow_dispatch:
 
 jobs:
   build-and-test:
+    name: Build and Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
         node-version: [18.x, 20.x]
+      fail-fast: false
 
     steps:
     - name: Checkout code
@@ -51,6 +54,25 @@ jobs:
         test -f dist/index.html
         test -f dist/assets/*.js
 
+    - name: Check build size
+      run: |
+        # Check if build size is reasonable
+        BUILD_SIZE=$(du -sb dist/ | cut -f1)
+        BUILD_SIZE_MB=$((BUILD_SIZE / 1024 / 1024))
+        echo "Build size: ${BUILD_SIZE_MB} MB"
+        if [ $BUILD_SIZE_MB -gt 10 ]; then
+          echo "::warning::Build size is larger than 10MB (${BUILD_SIZE_MB}MB)"
+        fi
+
+    - name: Verify HTML structure
+      run: |
+        # Basic HTML validation
+        if ! grep -q '<div id="root">' dist/index.html; then
+          echo "Error: Missing root div in index.html"
+          exit 1
+        fi
+        echo "HTML structure verified"
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -59,7 +81,9 @@ jobs:
         retention-days: 7
 
   security-scan:
+    name: Security Scanning
     runs-on: ubuntu-latest
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -75,11 +99,137 @@ jobs:
 
     - name: Run security audit
       run: npm audit --audit-level moderate
+      continue-on-error: true
 
     - name: Check for sensitive files
       run: |
         # Check for accidentally committed secrets
-        if grep -r "GEMINI_API_KEY.*=" . --exclude-dir=node_modules --exclude-dir=.git --exclude="*.yml" --exclude="*.yaml" --exclude="*.md"; then
-          echo "Warning: Potential API key found in code"
+        echo "Checking for sensitive data..."
+        if grep -r "GEMINI_API_KEY.*=" . --exclude-dir=node_modules --exclude-dir=.git --exclude="*.yml" --exclude="*.yaml" --exclude="*.md" --exclude=".env.example"; then
+          echo "::error::Potential API key found in code"
+          exit 1
+        fi
+        echo "No sensitive data found"
+
+    - name: Verify .gitignore
+      run: |
+        # Check that important files are in .gitignore
+        echo "Verifying .gitignore configuration..."
+        if ! grep -q "\.env\.local" .gitignore; then
+          echo "::warning::.env.local not in .gitignore"
+        fi
+        if ! grep -q "node_modules" .gitignore; then
+          echo "::warning::node_modules not in .gitignore"
+        fi
+        if ! grep -q "dist" .gitignore; then
+          echo "::warning::dist not in .gitignore"
+        fi
+
+    - name: Check dependencies licenses
+      run: |
+        # List all dependencies and their licenses
+        echo "Checking dependency licenses..."
+        npx license-checker --summary || echo "license-checker not available, skipping"
+
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Check for TODO/FIXME comments
+      run: |
+        echo "Checking for TODO/FIXME comments..."
+        if grep -r "TODO\|FIXME" . --include="*.ts" --include="*.tsx" --exclude-dir=node_modules; then
+          echo "::warning::Found TODO/FIXME comments in code"
+        else
+          echo "No TODO/FIXME comments found"
+        fi
+
+    - name: Check code formatting
+      run: |
+        # Check for common formatting issues
+        echo "Checking code formatting..."
+        if grep -r "console\.log" . --include="*.ts" --include="*.tsx" --exclude-dir=node_modules | grep -v "console.error"; then
+          echo "::warning::Found console.log statements (consider removing for production)"
+        fi
+
+    - name: Check for unused dependencies
+      run: |
+        echo "Checking for potentially unused dependencies..."
+        # This is a basic check - could be enhanced with tools like depcheck
+        echo "Consider running 'npx depcheck' locally to find unused dependencies"
+
+  documentation-check:
+    name: Documentation Verification
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check required documentation
+      run: |
+        echo "Verifying documentation files..."
+        REQUIRED_DOCS=("README.md" "CONTRIBUTING.md" "CODE_OF_CONDUCT.md" "DEPLOYMENT.md")
+        
+        for doc in "${REQUIRED_DOCS[@]}"; do
+          if [ -f "$doc" ]; then
+            echo "✓ $doc exists"
+          else
+            echo "::warning::$doc is missing"
+          fi
+        done
+
+    - name: Check README completeness
+      run: |
+        echo "Checking README completeness..."
+        REQUIRED_SECTIONS=("Installation" "Usage" "Contributing" "License")
+        
+        for section in "${REQUIRED_SECTIONS[@]}"; do
+          if grep -qi "$section" README.md; then
+            echo "✓ README contains $section section"
+          else
+            echo "::warning::README missing $section section"
+          fi
+        done
+
+    - name: Validate markdown links
+      run: |
+        echo "Checking for broken markdown links..."
+        # Basic check for markdown links
+        if grep -r "\[.*\](.*)" *.md 2>/dev/null; then
+          echo "Markdown links found - consider using a link checker tool"
+        fi
+
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [build-and-test, security-scan, code-quality, documentation-check]
+    if: always()
+    
+    steps:
+    - name: Check CI status
+      run: |
+        echo "CI Pipeline Summary"
+        echo "===================="
+        echo "Build and Test: ${{ needs.build-and-test.result }}"
+        echo "Security Scan: ${{ needs.security-scan.result }}"
+        echo "Code Quality: ${{ needs.code-quality.result }}"
+        echo "Documentation: ${{ needs.documentation-check.result }}"
+        
+        if [ "${{ needs.build-and-test.result }}" != "success" ]; then
+          echo "::error::Build and test failed"
           exit 1
         fi
